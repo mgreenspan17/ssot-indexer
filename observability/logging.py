@@ -21,7 +21,7 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, sort_keys=True)
 
 
-def configure_logging(log_dir: str | Path = "logs", level: int = logging.INFO) -> logging.Logger:
+def configure_logging(log_dir: str | Path = "/var/log/ssot-indexer", level: int = logging.INFO) -> logging.Logger:
     log_path = Path(log_dir)
     log_path.mkdir(parents=True, exist_ok=True)
     root = logging.getLogger()
