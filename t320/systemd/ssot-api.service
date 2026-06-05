@@ -7,6 +7,8 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/opt/ssot-indexer
 EnvironmentFile=-/etc/ssot-indexer.env
+Environment=SSOT_REGISTRY_URL=http://127.0.0.1:9000
+Environment=SSOT_REGISTRY_ENABLED=true
 ExecStart=/opt/ssot-indexer/venv/bin/python -m cli serve --host 0.0.0.0 --port 8000
 User=ssot
 Group=ssot
