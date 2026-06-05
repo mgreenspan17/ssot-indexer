@@ -1,4 +1,5 @@
 # MCP Registry Client
+"""Registry client for MCP integration.
 
 Provides integration between the SSOT Indexer and the MCP Registry service.
 Handles loading and caching of registry sections at startup.
@@ -8,8 +9,7 @@ Handles loading and caching of registry sections at startup.
 - identity: Agent identity graph
 - preferences: User preferences and configuration
 - deployment: Current deployment state
-
-"""Registry client for MCP integration."""
+"""
 from __future__ import annotations
 
 import logging

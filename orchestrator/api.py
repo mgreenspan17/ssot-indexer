@@ -10,6 +10,7 @@ from observability.metrics import create_metrics_app
 from observability.tracing import configure_tracing
 from orchestrator.service import SSOTOrchestrator
 from orchestrator.registry import RegistryCache, RegistryMetadata
+from pil.ingestion.ssot_adapter import ingestion_status
 from resolver.zpath import resolve_z_path
 
 logger = get_logger(__name__)
@@ -84,6 +85,10 @@ def create_app(orchestrator: SSOTOrchestrator | None = None) -> FastAPI:
         except (ValueError, KeyError) as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return result.__dict__
+
+    @app.get("/ingestion/status")
+    def ingestion_state() -> dict:
+        return ingestion_status()
 
     metrics_app = create_metrics_app()
     app.mount("/metrics", metrics_app)

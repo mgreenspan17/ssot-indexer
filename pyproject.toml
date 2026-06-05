@@ -35,6 +35,7 @@ dev = [
 
 [project.scripts]
 ssot-indexer = "cli.main:main"
+ssotctl = "cli.ssotctl:main"
 
 [tool.setuptools]
 include-package-data = true
