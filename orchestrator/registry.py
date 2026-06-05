@@ -1,5 +1,4 @@
-# MCP Registry Client
-"""Registry client for MCP integration.
+"""MCP Registry Client
 
 Provides integration between the SSOT Indexer and the MCP Registry service.
 Handles loading and caching of registry sections at startup.
