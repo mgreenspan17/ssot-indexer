@@ -1,0 +1,38 @@
+[Unit]
+Description=SSOT Indexer Orchestrator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/ssot-indexer
+EnvironmentFile=-/etc/ssot-indexer.env
+ExecStart=/opt/ssot-indexer/t320/update.sh
+User=ssot
+Group=ssot
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/ssot /var/log/ssot-indexer
+
+[Install]
+WantedBy=multi-user.target
+[Unit]
+Description=SSOT Indexer Orchestrator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/ssot-indexer
+Environment=PYTHONUNBUFFERED=1
+Environment=SSOT_STORAGE_ROOT=/ssot
+ExecStart=/opt/ssot-indexer/venv/bin/python -m cli serve --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

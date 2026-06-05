@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ssot-indexer"
+version = "1.0.0"
+description = "SSOT file indexer with canonical storage, shortcuts, and resolver support"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "Proprietary"}
+authors = [{name = "Copilot"}]
+dependencies = [
+  "blake3",
+  "python-magic-bin; platform_system == 'Windows'",
+  "python-magic; platform_system != 'Windows'",
+  "psycopg2-binary",
+  "fastapi",
+  "uvicorn",
+  "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-asyncio",
+  "ruff",
+  "mypy",
+  "build",
+  "pip-audit",
+  "prometheus-client",
+  "opentelemetry-api",
+  "opentelemetry-sdk",
+]
+
+[project.scripts]
+ssot-indexer = "cli.main:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+  "canonical*",
+  "classify*",
+  "cli*",
+  "consolidation*",
+  "hashing*",
+  "health*",
+  "indexer*",
+  "lifecycle*",
+  "pil*",
+  "graph*",
+  "observability*",
+  "orchestrator*",
+  "resolver*",
+  "rules*",
+  "scanner*",
+  "shortcuts*",
+  "telemetry*",
+  "t320*",
+  "uuid*",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_unused_configs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+check_untyped_defs = true
+ignore_missing_imports = true

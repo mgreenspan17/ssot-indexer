@@ -1,0 +1,31 @@
+type Query {
+  file(uuid7: ID, hash: String, canonical_path: String): File
+}
+
+type File {
+  uuid7: ID!
+  hash: String!
+  canonical_path: String!
+  metadata: JSON
+  relationships: [Relationship!]!
+  versions: [Version!]!
+  shortcuts: [Shortcut!]!
+}
+
+type Relationship {
+  source: ID!
+  target: ID!
+  edge_type: String!
+}
+
+type Version {
+  id: ID!
+  version_number: Int!
+}
+
+type Shortcut {
+  path: String!
+  target_path: String!
+}
+
+scalar JSON

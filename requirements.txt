@@ -1,0 +1,14 @@
+blake3
+python-magic-bin; platform_system == "Windows"
+python-magic; platform_system != "Windows"
+psycopg2-binary
+fastapi
+uvicorn
+python-dotenv
+pytest
+pytest-asyncio
+ruff
+mypy
+prometheus-client
+opentelemetry-api
+opentelemetry-sdk

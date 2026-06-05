@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ssot
+          POSTGRES_USER: ssot
+          POSTGRES_PASSWORD: ssot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ssot -d ssot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://ssot:ssot@localhost:5432/ssot
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+      - name: Run tests
+        run: pytest -q
+      - name: Run linting
+        run: ruff check .
+      - name: Run type checks
+        run: mypy .
+      - name: Validate SQL migrations
+        run: python scripts/validate_sql.py
+      - name: Validate FastAPI loads
+        run: python -c "from orchestrator.api import create_app; assert create_app().title == 'SSOT Indexer'; print('fastapi_ok')"
+      - name: Validate CLI commands
+        run: |
+          python -m cli --help
+          python -m cli scan . --json /tmp/manifest.json
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          Path('/tmp/lookup.json').write_text(json.dumps({'abc': '.'}), encoding='utf-8')
+          PY
+          python -m cli resolve z://abc --lookup-json /tmp/lookup.json
+      - name: Run scanner dry-run mode
+        run: python -m cli scan . --json /tmp/scanner-dry-run.json
+

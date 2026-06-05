@@ -1,0 +1,49 @@
+name: nightly
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ssot
+          POSTGRES_USER: ssot
+          POSTGRES_PASSWORD: ssot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ssot -d ssot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://ssot:ssot@localhost:5432/ssot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+      - name: Apply migrations
+        run: bash scripts/apply_migrations.sh
+      - name: Run scanner dry-run
+        run: python -m cli scan . --json /tmp/nightly-manifest.json
+      - name: Run ingestion simulation
+        run: python scripts/generate_release_notes.py --output /tmp/nightly-release-notes.md
+      - name: Run canonical store integrity check
+        run: python -c "from health.canonical_store_health import check; print(check())"
+      - name: Run shortcut validation
+        run: python -c "from health.shortcut_health import check; print(check())"
+      - name: Send summary to logs
+        run: python -c "print('nightly summary ok')"
+
