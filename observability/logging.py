@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 import json
 import logging
@@ -21,7 +22,9 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, sort_keys=True)
 
 
-def configure_logging(log_dir: str | Path = "/var/log/ssot-indexer", level: int = logging.INFO) -> logging.Logger:
+def configure_logging(log_dir: str | Path | None = None, level: int = logging.INFO) -> logging.Logger:
+    if log_dir is None:
+        log_dir = os.environ.get("SSOT_LOG_DIR", "/var/log/ssot-indexer")
     log_path = Path(log_dir)
     log_path.mkdir(parents=True, exist_ok=True)
     root = logging.getLogger()
