@@ -1,0 +1,20 @@
+{
+  "$schema_version": "1.0.0",
+  "registry_id": "ssot-registry-001",
+  "section": "deployment_state",
+  "last_updated": "2026-06-05T20:29:24Z",
+  "author": "Oz + Manni",
+  "repo": "github:mgreenspan17/ssot-indexer",
+  "status": "in-progress",
+  "notes": [
+    "Code authored on desktop -> pushed to GitHub.",
+    "Warp deploys from WSL -> srv1.",
+    "SSH path must be fixed."
+  ],
+  "mcp_registry": {
+    "path": "/opt/mcp-registry",
+    "service_name": "mcp-registry.service",
+    "port": 9000,
+    "user": "mannieg"
+  }
+}

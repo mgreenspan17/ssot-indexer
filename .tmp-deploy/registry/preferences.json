@@ -1,0 +1,32 @@
+{
+  "$schema_version": "1.0.0",
+  "registry_id": "ssot-registry-001",
+  "section": "preferences_mannie",
+  "last_updated": "2026-06-05T20:29:24Z",
+  "author": "Oz + Manni",
+  "requires_reply_analysis": true,
+  "single_next_prompt": true,
+  "no_partial_prompts": true,
+  "versioning": {
+    "enabled": true,
+    "changelog_file": "CHANGELOG.md",
+    "rules": {
+      "breaking_change": "bump_major",
+      "new_feature": "bump_minor",
+      "bug_fix": "bump_patch"
+    }
+  },
+  "git": {
+    "commit_style": "semantic",
+    "auto_tag": "agent:auto"
+  },
+  "safety": {
+    "backup_before_modification": true,
+    "dry_run_env_var": "AGENT_DRY_RUN",
+    "manual_intervention_required_for": [
+      "credential_changes",
+      "destructive_db_migrations",
+      "deleting_remote_branches"
+    ]
+  }
+}

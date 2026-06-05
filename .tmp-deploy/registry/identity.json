@@ -1,0 +1,21 @@
+{
+  "$schema_version": "1.0.0",
+  "registry_id": "ssot-registry-001",
+  "section": "identity_graph",
+  "last_updated": "2026-06-05T20:29:24Z",
+  "author": "Oz + Manni",
+  "entities": {
+    "srv1": {
+      "canonical_name": "srv1",
+      "aliases": ["t320", "Dell T320", "192.168.1.50", "main-server", "ai-host"],
+      "roles": ["SSOT-Indexer-Host", "Database-Host", "AI-Node"],
+      "edges": [
+        {"relation": "runs_service", "target": "ssot-indexer"},
+        {"relation": "runs_service", "target": "postgres"},
+        {"relation": "runs_service", "target": "mcp-registry"}
+      ],
+      "ssh_user": "mannieg",
+      "os": "Linux"
+    }
+  }
+}
