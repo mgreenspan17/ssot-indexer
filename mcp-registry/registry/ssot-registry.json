@@ -1,0 +1,60 @@
+{
+  "$schema_version": "1.0.0",
+  "registry_id": "ssot-registry-001",
+  "last_updated": "2026-06-05T20:09:00Z",
+  "agent_behavior_contract": {
+    "interaction_loop_rule": "User pastes external agent reply → AI analyzes → AI produces one complete next prompt → AI waits.",
+    "prompt_completeness_rule": "If the AI can anticipate future steps, include them now.",
+    "no_partial_prompts": true,
+    "warp_steering_style": "Use natural language steering, not raw commands, unless Warp chooses commands.",
+    "deployment_context": "SSOT Indexer runs on srv1, not WSL."
+  },
+  "identity_graph": {
+    "entities": {
+      "srv1": {
+        "aliases": ["t320", "Dell T320", "192.168.1.50", "main-server", "ai-host"],
+        "roles": ["SSOT-Indexer-Host", "Database-Host", "AI-Node"],
+        "edges": [
+          {"relation": "runs_service", "target": "ssot-indexer"},
+          {"relation": "runs_service", "target": "postgres"}
+        ]
+      }
+    }
+  },
+  "preferences_mannie": {
+    "requires_reply_analysis": true,
+    "single_next_prompt": true,
+    "no_partial_prompts": true,
+    "versioning": {
+      "enabled": true,
+      "changelog_file": "CHANGELOG.md",
+      "rules": {
+        "breaking_change": "bump_major",
+        "new_feature": "bump_minor",
+        "bug_fix": "bump_patch"
+      }
+    },
+    "git": {
+      "commit_style": "semantic",
+      "auto_tag": "agent:auto"
+    },
+    "safety": {
+      "backup_before_modification": true,
+      "dry_run_env_var": "AGENT_DRY_RUN",
+      "manual_intervention_required_for": [
+        "credential_changes",
+        "destructive_db_migrations",
+        "deleting_remote_branches"
+      ]
+    }
+  },
+  "deployment_state": {
+    "repo": "github:mgreenspan17/ssot-indexer",
+    "status": "in-progress",
+    "notes": [
+      "Code authored on desktop → pushed to GitHub.",
+      "Warp deploys from WSL → srv1.",
+      "SSH path must be fixed."
+    ]
+  }
+}

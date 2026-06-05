@@ -1,0 +1,27 @@
+[Unit]
+Description=SSOT Registry MCP Server - Personal Intelligence Layer OS
+Documentation=https://github.com/mgreenspan17/ssot-indexer/tree/main/mcp-registry
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/ssot-registry
+ExecStart=/opt/ssot-registry/venv/bin/python3 /opt/ssot-registry/server.py
+Restart=on-failure
+RestartSec=5
+StandardError=journal
+StandardOutput=journal
+SyslogIdentifier=ssot-registry-mcp
+Environment=PYTHONUNBUFFERED=1
+Environment=REGISTRY_DIR=/opt/ssot-registry/registry
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/ssot-registry/registry
+
+[Install]
+WantedBy=multi-user.target
