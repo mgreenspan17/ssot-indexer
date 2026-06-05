@@ -20,20 +20,3 @@ ReadWritePaths=/ssot /var/log/ssot-indexer
 
 [Install]
 WantedBy=multi-user.target
-[Unit]
-Description=SSOT Indexer API
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-WorkingDirectory=/opt/ssot-indexer
-Environment=PYTHONUNBUFFERED=1
-ExecStart=/opt/ssot-indexer/venv/bin/python -m cli serve --host 0.0.0.0 --port 8080
-Restart=on-failure
-RestartSec=5
-NoNewPrivileges=true
-PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
