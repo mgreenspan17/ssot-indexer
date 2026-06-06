@@ -101,7 +101,7 @@ def create_app(orchestrator: SSOTOrchestrator | None = None) -> FastAPI:
         if not manifest_path.exists():
             raise HTTPException(status_code=400, detail=f"Manifest file not found: {manifest_path}")
 
-        dsn = os.getenv("SSOT_DATABASE_DSN", "dbname=ssot user=ssot host=/var/run/postgresql")
+        dsn = os.getenv("SSOT_DATABASE_DSN", "dbname=ssot user=ssot host=/var/run/postgresql port=5433")
         orchestrator = SSOTOrchestrator(dsn=dsn)
 
         try:
