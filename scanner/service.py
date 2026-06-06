@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import json
 
+from scanner.factory import scan_any_target
 from scanner.local import scan_local_directory
 from scanner.models import ScanManifest
 from scanner.rclone import RcloneConfig, scan_rclone_directory
@@ -27,7 +28,9 @@ def scan_target(target: str) -> ScanResult:
         remote, _, path = body.partition("/")
         manifest = scan_rclone_directory(RcloneConfig(remote=remote), path)
         return ScanResult(manifest=manifest)
-    return ScanResult(manifest=scan_local_directory(target).manifest)
+    if Path(target).exists():
+        return ScanResult(manifest=scan_local_directory(target).manifest)
+    return ScanResult(manifest=scan_any_target(target))
 
 
 def manifest_to_json(manifest: ScanManifest) -> str:
