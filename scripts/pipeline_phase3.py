@@ -63,6 +63,7 @@ CHECKPOINT_FILE = CHECKPOINT_DIR / "pipeline_state.json"
 STAGE1_SAMPLE = CHECKPOINT_DIR / "stage1_sample.json"
 STAGE2_INDEX = CHECKPOINT_DIR / "stage2_index.json"
 STAGE3_RESULTS = CHECKPOINT_DIR / "stage3_results.json"
+AUTHORITATIVE_INGESTION_MANIFEST = INGESTION_DIR / "authoritative_manifest.json"
 PIPELINE_LOG = LOG_DIR / "pipeline.log"
 
 BATCH_SIZE = 500
@@ -261,9 +262,6 @@ def _run_stage1(state: PipelineState, repository: PostgresRepository) -> Pipelin
 
     sample_records: list[dict[str, Any]] = []
 
-    if STAGE1_SAMPLE.exists():
-        sample_records = json.loads(STAGE1_SAMPLE.read_text(encoding="utf-8"))
-
     _log(f"Processing {len(sample_files)} files for deep sample")
 
     for i, fpath in enumerate(sample_files):
@@ -366,9 +364,6 @@ def _run_stage2(state: PipelineState, repository: PostgresRepository) -> Pipelin
     state.stage2_files_total = len(all_files)
     index_records: list[dict[str, Any]] = []
 
-    if STAGE2_INDEX.exists():
-        index_records = json.loads(STAGE2_INDEX.read_text(encoding="utf-8"))
-
     _log(f"Indexing {len(remaining)} files (metadata only)")
 
     for i, fpath in enumerate(remaining):
@@ -418,10 +413,12 @@ def _run_stage2(state: PipelineState, repository: PostgresRepository) -> Pipelin
             STAGE2_INDEX.write_text(json.dumps(index_records, indent=2), encoding="utf-8")
 
     STAGE2_INDEX.write_text(json.dumps(index_records, indent=2), encoding="utf-8")
+    AUTHORITATIVE_INGESTION_MANIFEST.write_text(json.dumps(index_records, indent=2), encoding="utf-8")
     state.stage2_complete = True
     _save_checkpoint(state)
 
     _log(f"Stage 2 complete: {state.stage2_files_processed} files indexed")
+    _log(f"Stage 2 authoritative ingestion manifest: {AUTHORITATIVE_INGESTION_MANIFEST}")
     return state
 
 
@@ -456,8 +453,6 @@ def _run_stage3(state: PipelineState, repository: PostgresRepository) -> Pipelin
     _log(f"Processing {len(remaining)} files for deep content")
 
     results: list[dict[str, Any]] = []
-    if STAGE3_RESULTS.exists():
-        results = json.loads(STAGE3_RESULTS.read_text(encoding="utf-8"))
 
     for i, record_meta in enumerate(remaining):
         if _shutdown_requested:
@@ -556,7 +551,14 @@ def run_pipeline(start_stage: int = 1) -> None:
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
     INGESTION_DIR.mkdir(parents=True, exist_ok=True)
 
-    state = _load_checkpoint() or PipelineState(
+    checkpoint_state = _load_checkpoint()
+    if checkpoint_state is None:
+        for stale_file in (STAGE1_SAMPLE, STAGE2_INDEX, STAGE3_RESULTS):
+            if stale_file.exists():
+                stale_file.unlink()
+                _log(f"Removed stale checkpoint artifact for fresh run: {stale_file}")
+
+    state = checkpoint_state or PipelineState(
         started_at=datetime.now(timezone.utc).isoformat(),
     )
 

@@ -66,6 +66,7 @@ include = [
   "graph*",
   "observability*",
   "orchestrator*",
+  "pipeline_api*",
   "resolver*",
   "rules*",
   "scanner*",
