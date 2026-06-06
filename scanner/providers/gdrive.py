@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from scanner.base import GOOGLE_PSEUDO_MIME_TYPES, build_file_record, iter_regular_files, manifest_from_records
+from scanner.base import GOOGLE_PSEUDO_MIME_TYPES, build_file_record, build_source_descriptor, derive_cloud_root_id, iter_regular_files, manifest_from_records, path_metadata_payload
 from scanner.models import ScanManifest
 from scanner.providers.base import ProviderScanner
 
@@ -20,6 +20,8 @@ def _candidate_roots() -> list[Path]:
 
 class GoogleDriveScanner(ProviderScanner):
     provider_name = "gdrive"
+    capabilities = ("scan", "source_tracking", "pseudo_files", "offline_online_state")
+    description = "Google Drive for Desktop and File Stream scanner"
 
     def detect(self, target: str | None = None) -> bool:
         if target:
@@ -37,6 +39,12 @@ class GoogleDriveScanner(ProviderScanner):
         if root is None:
             raise FileNotFoundError("Google Drive root not detected")
         source = f"gdrive://{root}"
+        descriptor = build_source_descriptor(
+            "gdrive",
+            root,
+            source_label=root.name or "Google Drive",
+            provider_account_id=derive_cloud_root_id("gdrive", root),
+        )
         records = []
         for path in iter_regular_files(root):
             suffix = path.suffix.lower()
@@ -55,9 +63,10 @@ class GoogleDriveScanner(ProviderScanner):
                 build_file_record(
                     path,
                     source=source,
+                    source_descriptor=descriptor,
                     record_path=str(path),
                     mime_type_override=GOOGLE_PSEUDO_MIME_TYPES.get(suffix),
-                    metadata_payload=metadata_payload,
+                    metadata_payload=path_metadata_payload(path, provider_name=self.provider_name, extra=metadata_payload),
                 )
             )
-        return manifest_from_records(source, records)
+        return manifest_from_records(source, records, descriptor)

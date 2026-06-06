@@ -8,11 +8,13 @@ Boundaries:
 
 Integration notes:
 - Warp can later replace metadata fallback with Google Drive API enrichment.
+- Source tracking uses a provider/root identifier so manifests remain attributable per drive root or account root.
 
 Special handling:
 - .gdoc, .gsheet, .gslides, .gdraw, .gform, .gsite
 - .gshortcut
 - offline or online-only descriptors
+- pseudo-file metadata hashing
 
 ASCII flow:
 Google Drive root

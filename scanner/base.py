@@ -25,7 +25,7 @@ from typing import Any, Iterable
 
 from classify.classifier import classify_file
 from hashing.blake3_utils import hash_bytes, hash_file
-from scanner.models import FileRecord, ScanManifest
+from scanner.models import FileRecord, ScanManifest, SourceType
 from uuid.generator import uuid7_str
 
 
@@ -54,6 +54,26 @@ class PathTranslation:
     original: str
     translated: str
     environment: str
+
+
+@dataclass(frozen=True)
+class SourceDescriptor:
+    source_id: str
+    source_type: SourceType
+    source_label: str | None
+    source_device_uuid: str | None
+
+
+def normalize_windows_path(path: str | Path) -> str:
+    value = str(path)
+    if not is_windows_path(value):
+        return value
+    if value.startswith("\\\\?\\"):
+        return value
+    if value.startswith("\\\\"):
+        suffix = value.lstrip("\\")
+        return f"\\\\?\\UNC\\{suffix}"
+    return f"\\\\?\\{value}"
 
 
 def is_windows_path(value: str) -> bool:
@@ -96,6 +116,84 @@ def candidate_user_roots(home: Path | None = None) -> list[Path]:
     return candidates or [base]
 
 
+def _stable_source_hash(payload: dict[str, Any]) -> str:
+    return hash_bytes(json.dumps(payload, sort_keys=True).encode("utf-8")).digest
+
+
+def determine_source_type(provider_name: str, root: str | Path) -> SourceType:
+    normalized = provider_name.lower()
+    if normalized in {"windows", "wsl", "gdrive", "onedrive", "dropbox"}:
+        return normalized  # type: ignore[return-value]
+    root_path = str(root)
+    if root_path.startswith("\\\\"):
+        return "network"
+    if root_path.startswith("/mnt/") or root_path.startswith("/media/") or root_path.startswith("/run/media/"):
+        return "external"
+    if normalized in {"local", "ssh", "rclone"}:
+        return "local"
+    return "provider"
+
+
+def build_source_descriptor(
+    provider_name: str,
+    root: str | Path,
+    *,
+    source_label: str | None = None,
+    provider_account_id: str | None = None,
+    source_device_uuid: str | None = None,
+) -> SourceDescriptor:
+    root_text = str(root)
+    source_type = determine_source_type(provider_name, root_text)
+    device_uuid = source_device_uuid or provider_account_id
+    if device_uuid is None:
+        try:
+            stat_result = Path(root_text).stat()
+            device_uuid = _stable_source_hash({"provider": provider_name, "device": stat_result.st_dev})
+        except OSError:
+            device_uuid = _stable_source_hash({"provider": provider_name, "root": root_text})
+    source_id = _stable_source_hash(
+        {
+            "provider": provider_name,
+            "root": root_text,
+            "device_uuid": device_uuid,
+            "label": source_label,
+        }
+    )
+    label = source_label or Path(root_text).name or root_text
+    return SourceDescriptor(
+        source_id=source_id,
+        source_type=source_type,
+        source_label=label,
+        source_device_uuid=device_uuid,
+    )
+
+
+def derive_cloud_root_id(provider_name: str, root: str | Path) -> str:
+    return _stable_source_hash({"provider": provider_name, "root": str(root), "kind": "cloud-root"})
+
+
+def path_metadata_payload(path: Path, *, provider_name: str, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "path": str(path),
+        "provider": provider_name,
+        "is_symlink": path.is_symlink(),
+    }
+    try:
+        stat_result = path.stat()
+        payload.update(
+            {
+                "size": stat_result.st_size,
+                "mtime": stat_result.st_mtime,
+                "mode": stat_result.st_mode,
+            }
+        )
+    except OSError:
+        payload["stat_error"] = True
+    if extra:
+        payload.update(extra)
+    return payload
+
+
 def iter_regular_files(root: str | Path, excluded_dirs: Iterable[str] | None = None) -> list[Path]:
     root_path = Path(root)
     records: list[Path] = []
@@ -113,8 +211,17 @@ def iter_regular_files(root: str | Path, excluded_dirs: Iterable[str] | None = N
     return records
 
 
-def manifest_from_records(source: str, records: list[FileRecord]) -> ScanManifest:
-    return ScanManifest(source=source, generated_at=datetime.now(timezone.utc).isoformat(), records=records)
+def manifest_from_records(source: str, records: list[FileRecord], descriptor: SourceDescriptor | None = None) -> ScanManifest:
+    source_descriptor = descriptor or build_source_descriptor("local", source)
+    return ScanManifest(
+        source=source,
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        records=records,
+        source_id=source_descriptor.source_id,
+        source_type=source_descriptor.source_type,
+        source_label=source_descriptor.source_label,
+        source_device_uuid=source_descriptor.source_device_uuid,
+    )
 
 
 def _hash_with_fallback(path: Path, fallback_payload: dict[str, Any]) -> tuple[str, str]:
@@ -131,6 +238,7 @@ def build_file_record(
     path: Path,
     *,
     source: str,
+    source_descriptor: SourceDescriptor | None = None,
     record_path: str | None = None,
     mime_type_override: str | None = None,
     metadata_payload: dict[str, Any] | None = None,
@@ -144,6 +252,7 @@ def build_file_record(
     classification = classify_file(path)
     algorithm, digest = _hash_with_fallback(path, fallback_payload)
     mime_type = mime_type_override or classification.mime_type
+    descriptor = source_descriptor or build_source_descriptor("local", source)
     return FileRecord(
         uuid7=uuid7_str(),
         path=record_path or str(path.resolve()),
@@ -156,4 +265,8 @@ def build_file_record(
         category=classification.category,
         mime_type=mime_type,
         shortcut_allowed=classification.shortcut_allowed,
+        source_id=descriptor.source_id,
+        source_type=descriptor.source_type,
+        source_label=descriptor.source_label,
+        source_device_uuid=descriptor.source_device_uuid,
     )

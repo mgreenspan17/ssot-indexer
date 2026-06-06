@@ -8,10 +8,12 @@ Boundaries:
 
 Integration notes:
 - Warp can later add Dropbox API-backed file state enrichment.
+- Source tracking is derived from the Dropbox root and carried into each record.
 
 Special handling:
 - Smart Sync
 - online-only files
+- metadata fallback hashing for online-only placeholders
 
 ASCII flow:
 Dropbox root

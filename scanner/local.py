@@ -7,6 +7,7 @@ from stat import S_ISREG
 
 from classify.classifier import classify_file
 from hashing.blake3_utils import hash_file
+from scanner.base import build_source_descriptor
 from scanner.models import FileRecord, ScanManifest
 from uuid.generator import uuid7_str
 
@@ -19,6 +20,7 @@ class LocalScanResult:
 def scan_local_directory(root: str | Path) -> LocalScanResult:
     root_path = Path(root)
     records: list[FileRecord] = []
+    descriptor = build_source_descriptor("local", root_path, source_label=root_path.name or str(root_path))
     for path in root_path.rglob("*"):
         try:
             stat_result = path.stat()
@@ -41,11 +43,19 @@ def scan_local_directory(root: str | Path) -> LocalScanResult:
                 category=classification.category,
                 mime_type=classification.mime_type,
                 shortcut_allowed=classification.shortcut_allowed,
+                source_id=descriptor.source_id,
+                source_type=descriptor.source_type,
+                source_label=descriptor.source_label,
+                source_device_uuid=descriptor.source_device_uuid,
             )
         )
     manifest = ScanManifest(
         source=str(root_path.resolve()),
         generated_at=datetime.now(timezone.utc).isoformat(),
         records=records,
+        source_id=descriptor.source_id,
+        source_type=descriptor.source_type,
+        source_label=descriptor.source_label,
+        source_device_uuid=descriptor.source_device_uuid,
     )
     return LocalScanResult(manifest=manifest)

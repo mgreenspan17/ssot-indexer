@@ -28,6 +28,8 @@ def scan_target(target: str) -> ScanResult:
         remote, _, path = body.partition("/")
         manifest = scan_rclone_directory(RcloneConfig(remote=remote), path)
         return ScanResult(manifest=manifest)
+    if target == "auto":
+        return ScanResult(manifest=scan_any_target(target))
     if Path(target).exists():
         return ScanResult(manifest=scan_local_directory(target).manifest)
     return ScanResult(manifest=scan_any_target(target))

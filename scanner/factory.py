@@ -7,7 +7,7 @@ from pathlib import Path
 from scanner.base import is_windows_path, is_wsl_path
 from scanner.local import scan_local_directory
 from scanner.models import ScanManifest
-from scanner.providers.registry import get_provider_scanner, list_provider_names
+from scanner.providers.registry import detect_provider_scanner, get_provider_scanner, list_provider_names
 
 
 def scan_provider(name: str, target: str | None = None) -> ScanManifest:
@@ -30,6 +30,11 @@ def scan_any_target(target: str) -> ScanManifest:
         return scan_provider("onedrive", target)
     if "dropbox" in lowered:
         return scan_provider("dropbox", target)
+    if target == "auto":
+        scanner = detect_provider_scanner(None)
+        if scanner is None:
+            raise FileNotFoundError("no provider scanner auto-detected")
+        return scanner.scan(None)
     if target_path.exists():
         return scan_local_directory(target).manifest
     raise FileNotFoundError(f"unsupported scan target: {target}")

@@ -13,10 +13,12 @@ Integration notes:
 """
 
 import importlib
+from importlib import metadata as importlib_metadata
 import inspect
+import os
 import pkgutil
 
-from scanner.providers.base import ProviderScanner
+from scanner.providers.base import ProviderMetadata, ProviderScanner
 
 
 def _discover() -> dict[str, ProviderScanner]:
@@ -31,6 +33,22 @@ def _discover() -> dict[str, ProviderScanner]:
             if inspect.isclass(value) and issubclass(value, ProviderScanner) and value is not ProviderScanner:
                 instance = value()
                 scanners[instance.provider_name] = instance
+    for module_path in filter(None, os.environ.get("SSOT_SCANNER_PROVIDER_MODULES", "").split(os.pathsep)):
+        module = importlib.import_module(module_path)
+        for value in vars(module).values():
+            if inspect.isclass(value) and issubclass(value, ProviderScanner) and value is not ProviderScanner:
+                instance = value()
+                scanners[instance.provider_name] = instance
+    try:
+        entry_points = importlib_metadata.entry_points()
+        selected = entry_points.select(group="ssot_indexer.scanner_providers")
+    except Exception:
+        selected = ()
+    for entry_point in selected:
+        value = entry_point.load()
+        if inspect.isclass(value) and issubclass(value, ProviderScanner):
+            instance = value()
+            scanners[instance.provider_name] = instance
     return scanners
 
 
@@ -47,3 +65,14 @@ def get_provider_scanner(name: str) -> ProviderScanner:
     if name not in registry:
         raise KeyError(f"unknown provider scanner: {name}")
     return registry[name]
+
+
+def get_provider_metadata(name: str) -> ProviderMetadata:
+    return get_provider_scanner(name).metadata()
+
+
+def detect_provider_scanner(target: str | None = None) -> ProviderScanner | None:
+    for scanner in get_provider_registry().values():
+        if scanner.detect(target):
+            return scanner
+    return None

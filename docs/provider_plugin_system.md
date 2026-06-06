@@ -2,20 +2,43 @@
 
 Assumptions:
 - Providers live under scanner/providers and subclass ProviderScanner.
+- Additional providers may be loaded from environment-configured module paths or Python entry points.
 
 Boundaries:
 - Providers must emit the shared ScanManifest shape.
+- Providers do not bypass source tracking or governance rules.
 
-Integration notes:
-- New providers are auto-discovered through the registry.
+Discovery paths:
+1. Drop a provider file into scanner/providers/
+2. Add a module path to SSOT_SCANNER_PROVIDER_MODULES
+3. Register an entry point in group ssot_indexer.scanner_providers
+
+Provider metadata:
+- name
+- version
+- capabilities
+- description
 
 Required interface:
 class ProviderScanner:
-    def detect(self, target: str | None = None) -> bool
-    def scan(self, target: str | None = None) -> ScanManifest
+        provider_name: str
+        version: str
+        capabilities: tuple[str, ...]
+        description: str
+        def detect(self, target: str | None = None) -> bool
+        def scan(self, target: str | None = None) -> ScanManifest
 
-Add a provider:
-1. Create scanner/providers/<name>.py
-2. Subclass ProviderScanner
-3. Implement detect and scan
-4. The registry will auto-discover it
+ASCII registry flow:
+provider registry
+    -> package discovery
+    -> env module discovery
+    -> entry-point discovery
+    -> provider metadata
+    -> provider instance
+
+CLI surfaces:
+- ssotctl providers list
+- ssotctl providers info <name>
+
+Integration notes:
+- Warp can register future providers like Box, S3, or Synology Drive without changing core scanner routing.

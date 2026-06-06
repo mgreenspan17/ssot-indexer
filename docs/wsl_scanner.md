@@ -8,6 +8,7 @@ Boundaries:
 
 Integration notes:
 - Warp can later augment this with distro-aware mount discovery.
+- Source tracking is derived per mount root so manifests remain attributable across /mnt/c, /mnt/d, and similar paths.
 
 Path translation:
 - Windows -> WSL: C:\\Users\\name -> /mnt/c/Users/name
@@ -16,5 +17,6 @@ Path translation:
 ASCII flow:
 /mnt/c/path
   -> local walk in WSL-visible tree
+  -> path translation metadata
   -> FileRecord
   -> ScanManifest
