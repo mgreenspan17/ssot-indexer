@@ -115,6 +115,28 @@ def create_app(orchestrator: SSOTOrchestrator | None = None) -> FastAPI:
             logger.error(f"Ingestion failed for {manifest_path}: {exc}")
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    @app.post("/ingestion/index_only")
+    async def submit_index_only(request: IngestRequest) -> dict:
+        """INDEX-ONLY MODE: Ingest metadata into Postgres without canonicalization or shortcut creation."""
+        manifest_path = Path(request.manifest_path)
+        if not manifest_path.exists():
+            raise HTTPException(status_code=400, detail=f"Manifest file not found: {manifest_path}")
+
+        dsn = os.getenv("SSOT_DATABASE_DSN", "dbname=ssot user=ssot host=/var/run/postgresql port=5433")
+        orchestrator = SSOTOrchestrator(dsn=dsn)
+
+        try:
+            count = await orchestrator.ingest_index_only_from_manifest(manifest_path)
+            return {
+                "status": "success",
+                "mode": "index_only",
+                "manifest_path": str(manifest_path),
+                "records_indexed": count,
+            }
+        except Exception as exc:
+            logger.error(f"Index-only ingestion failed for {manifest_path}: {exc}")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
     metrics_app = create_metrics_app()
     app.mount("/metrics", metrics_app)
 

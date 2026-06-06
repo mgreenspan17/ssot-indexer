@@ -66,6 +66,25 @@ class SSOTOrchestrator:
             )
         return output
 
+    async def ingest_index_only_from_manifest(self, manifest_path: Path) -> int:
+        """Load a manifest from disk and ingest metadata into DB only (no canonicalization, no shortcuts).
+        
+        INDEX-ONLY MODE: Scan, hash, classify, write metadata to Postgres.
+        Does NOT write any files to /ssot/blake3 or /ssot/shortcuts.
+        """
+        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        
+        manifest = ScanManifest(
+            source=manifest_data["source"],
+            generated_at=manifest_data["generated_at"],
+            records=[FileRecord(**item) for item in manifest_data["records"]],
+        )
+        
+        repository = self.repository()
+        ingestor = ManifestIngestor(repository)
+        results = ingestor.ingest(manifest)
+        return len(results)
+
     def scan(self, target: str):
         return scan_target(target).manifest
 
