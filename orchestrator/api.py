@@ -105,7 +105,7 @@ def create_app(orchestrator: SSOTOrchestrator | None = None) -> FastAPI:
         orchestrator = SSOTOrchestrator(dsn=dsn)
 
         try:
-            results = await orchestrator.process_manifest_ingestion(manifest_path)
+            results = await orchestrator.ingest_and_canonicalize_from_manifest(manifest_path)
             return {
                 "status": "success",
                 "manifest_path": str(manifest_path),

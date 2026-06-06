@@ -37,6 +37,35 @@ class SSOTOrchestrator:
         ingestor = ManifestIngestor(repository)
         return ingestor.ingest(manifest)
 
+    async def ingest_and_canonicalize_from_manifest(self, manifest_path: Path) -> list[dict[str, object]]:
+        """Load a manifest from disk, ingest into DB, and materialize canonical files + shortcuts."""
+        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        
+        manifest = ScanManifest(
+            source=manifest_data["source"],
+            generated_at=manifest_data["generated_at"],
+            records=[FileRecord(**item) for item in manifest_data["records"]],
+        )
+        
+        repository = self.repository()
+        ingestor = ManifestIngestor(repository)
+        results = ingestor.ingest(manifest)
+        
+        canonical_store = CanonicalStoreManager(self.storage_root, self.shortcut_root, repository)
+        output: list[dict[str, object]] = []
+        for record, ingestion in zip(manifest.records, results, strict=True):
+            canonical = canonical_store.materialize(record, ingestion)
+            output.append(
+                {
+                    "file_id": ingestion.file_id,
+                    "version_id": ingestion.version_id,
+                    "canonical_path": canonical.canonical_path,
+                    "shortcut_path": canonical.shortcut_path,
+                    "verified": canonical.verified,
+                }
+            )
+        return output
+
     def scan(self, target: str):
         return scan_target(target).manifest
 
