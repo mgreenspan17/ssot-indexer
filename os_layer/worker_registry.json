@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "assumptions": [
+    "Workers register their lane and capabilities before receiving jobs.",
+    "Registry content is read by schedulers and Copilot, not mutated by workers."
+  ],
+  "boundaries": [
+    "No worker may self-assign infrastructure privileges.",
+    "No worker may rewrite governance."
+  ],
+  "workers": [],
+  "integration_notes": [
+    "Populate from Warp crawl results or agent bootstrap metadata.",
+    "Use with compute_mesh.py and scheduler.py."
+  ]
+}

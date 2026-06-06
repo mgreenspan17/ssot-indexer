@@ -1,0 +1,40 @@
+{
+  "section": "agent-governance",
+  "version": "1.0.0",
+  "source_of_truth": {
+    "type": "file",
+    "path": "/srv/data/ssot-governance/AGENT_GOVERNANCE.md",
+    "authoritative": true
+  },
+  "mirror_policy": {
+    "read_only": true,
+    "direct_agent_writes_allowed": false,
+    "sync_mode": "file_to_registry_only",
+    "sync_required_on_change": true
+  },
+  "coordination_hierarchy": "Operator -> Copilot -> (Warp | Cody | Experimental Agents)",
+  "lane_enforcement": {
+    "warp": {
+      "execution": "high",
+      "design": "low"
+    },
+    "cody": {
+      "artifact_generation": "high",
+      "execution": "none"
+    },
+    "copilot": {
+      "coordination": "high",
+      "direct_execution": "none"
+    },
+    "experimental": {
+      "compute": "high",
+      "infrastructure": "none"
+    }
+  },
+  "required_paths": {
+    "canonical_file": "/srv/data/ssot-governance/AGENT_GOVERNANCE.md",
+    "registry_endpoint": "/registry/agent-governance",
+    "repo_sync_copy": "AGENT_GOVERNANCE.md"
+  },
+  "notes": "Mirror payload should include exact canonical markdown and sync metadata such as updated_at and checksum."
+}

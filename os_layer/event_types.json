@@ -1,0 +1,24 @@
+{
+  "version": "1.0.0",
+  "assumptions": [
+    "Events are small, structured JSON payloads.",
+    "All agents can read event type definitions."
+  ],
+  "boundaries": [
+    "Do not overload event payloads with raw binaries.",
+    "Do not use events as a control channel for direct agent control."
+  ],
+  "types": [
+    "governance.refresh",
+    "agent.health",
+    "crawl.progress",
+    "file.discovery",
+    "registry.sync",
+    "mesh.job",
+    "escalation.request"
+  ],
+  "integration_notes": [
+    "Use with event_bus.py and diagnostics_loop.py.",
+    "Coprocessing and visualization layers may subscribe to these types."
+  ]
+}

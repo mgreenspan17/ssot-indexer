@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "assumptions": [
+    "Autonomy is bounded by lane rules and safety checks.",
+    "Copilot authorization can lower or raise permitted action scope."
+  ],
+  "boundaries": [
+    "No lane may override governance.",
+    "No experimental agent may mutate infrastructure."
+  ],
+  "rules": {
+    "warp": {"execution": 3, "design": 1},
+    "cody": {"artifact_generation": 3, "execution": 0},
+    "copilot": {"coordination": 3, "direct_execution": 0},
+    "experimental": {"compute": 3, "infrastructure": 0}
+  },
+  "integration_notes": [
+    "Use this file as a reference payload for autonomy_engine.py.",
+    "Treat values as advisory until governance is validated."
+  ]
+}

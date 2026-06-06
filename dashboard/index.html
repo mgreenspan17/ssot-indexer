@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Assumptions: placeholder data is acceptable until Warp populates live feeds. -->
+    <!-- Boundaries: this page is read-only and does not execute operations. -->
+    <!-- Integration notes: bind dashboard.js to dashboard_api.py when live APIs are available. -->
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SSOT OS Operator Dashboard</title>
+    <link rel="stylesheet" href="dashboard.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">SSOT OS</p>
+        <h1>Operator Dashboard</h1>
+        <p class="lede">Placeholder operator console for governance, crawl status, system health, and file navigation.</p>
+      </div>
+      <div id="governance-version-panel" class="panel panel--accent"></div>
+    </header>
+
+    <main class="grid">
+      <section id="agent-status-panel" class="panel"></section>
+      <section id="crawl-progress-panel" class="panel"></section>
+      <section id="file-browser-panel" class="panel"></section>
+      <section id="system-health-panel" class="panel"></section>
+    </main>
+
+    <footer class="footer">Placeholder APIs are safe until Warp populates real crawl and mesh data.</footer>
+    <script type="module" src="dashboard.js"></script>
+  </body>
+</html>

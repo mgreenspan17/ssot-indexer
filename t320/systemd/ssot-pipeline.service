@@ -1,0 +1,20 @@
+[Unit]
+Description=SSOT Filesystem Analysis Pipeline — Phase 3
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/ssot-indexer
+EnvironmentFile=-/etc/ssot-indexer.env
+Environment=SSOT_PIPELINE_LOG=/srv/data/ssot/logs/pipeline.log
+ExecStart=/opt/ssot-indexer/venv/bin/python /opt/ssot-indexer/scripts/pipeline_phase3.py
+User=ssot
+Group=ssot
+Restart=on-failure
+RestartSec=30
+NoNewPrivileges=true
+ReadWritePaths=/srv/data/ssot
+
+[Install]
+WantedBy=multi-user.target

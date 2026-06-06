@@ -39,6 +39,14 @@ ssotctl = "cli.ssotctl:main"
 
 [tool.setuptools]
 include-package-data = true
+py-modules = [
+  "dashboard_api",
+  "dashboard_api_crawl",
+  "dashboard_api_files",
+  "dashboard_api_agents",
+  "dashboard_api_governance",
+  "dashboard_api_system",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -48,9 +56,11 @@ include = [
   "cli*",
   "consolidation*",
   "hashing*",
+  "health_checks*",
   "health*",
   "indexer*",
   "lifecycle*",
+  "os_layer*",
   "pil*",
   "graph*",
   "observability*",
