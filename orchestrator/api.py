@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from fastapi import FastAPI, HTTPException
+from pathlib import Path
 from pydantic import BaseModel
 
 from observability.logging import configure_logging, get_logger
@@ -23,6 +24,10 @@ class ScanRequest(BaseModel):
 class ResolveRequest(BaseModel):
     z_path: str
     lookup: dict[str, str]
+
+
+class IngestRequest(BaseModel):
+    manifest_path: str
 
 
 def create_app(orchestrator: SSOTOrchestrator | None = None) -> FastAPI:
@@ -89,6 +94,26 @@ def create_app(orchestrator: SSOTOrchestrator | None = None) -> FastAPI:
     @app.get("/ingestion/status")
     def ingestion_state() -> dict:
         return ingestion_status()
+
+    @app.post("/ingestion/submit")
+    async def submit_ingestion(request: IngestRequest) -> dict:
+        manifest_path = Path(request.manifest_path)
+        if not manifest_path.exists():
+            raise HTTPException(status_code=400, detail=f"Manifest file not found: {manifest_path}")
+
+        dsn = os.getenv("SSOT_DATABASE_DSN", "dbname=ssot user=ssot host=/var/run/postgresql")
+        orchestrator = SSOTOrchestrator(dsn=dsn)
+
+        try:
+            results = await orchestrator.process_manifest_ingestion(manifest_path)
+            return {
+                "status": "success",
+                "manifest_path": str(manifest_path),
+                "records_ingested": len(results),
+            }
+        except Exception as exc:
+            logger.error(f"Ingestion failed for {manifest_path}: {exc}")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     metrics_app = create_metrics_app()
     app.mount("/metrics", metrics_app)
