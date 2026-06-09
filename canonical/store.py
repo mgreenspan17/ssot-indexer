@@ -3,12 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import shutil
+from typing import TYPE_CHECKING, Any
 
 from hashing.blake3_utils import hash_file
 from indexer.models import IngestionResult
-from indexer.postgres import PostgresRepository
 from scanner.models import FileRecord
 from shortcuts.generator import create_shortcut
+
+if TYPE_CHECKING:
+    from indexer.postgres import PostgresRepository
 
 
 @dataclass(frozen=True)
@@ -22,7 +25,7 @@ class CanonicalResult:
 class CanonicalStoreManager:
     storage_root: Path
     shortcut_root: Path
-    repository: PostgresRepository | None = None
+    repository: Any | None = None
 
     def canonical_path_for(self, blake3_digest: str) -> Path:
         return self.storage_root / "blake3" / blake3_digest
@@ -51,6 +54,7 @@ class CanonicalStoreManager:
         if self.repository is not None:
             self.repository.record_canonical_store(record.uuid7, ingestion.version_id, record.blake3, str(canonical_path), verified)
             if shortcut_path is not None:
-                self.repository.record_shortcut(record.uuid7, ingestion.version_id, shortcut_path, str(canonical_path), "symlink")
+                shortcut_kind = "symlink" if Path(shortcut_path).is_symlink() else "copy"
+                self.repository.record_shortcut(record.uuid7, ingestion.version_id, shortcut_path, str(canonical_path), shortcut_kind)
 
         return CanonicalResult(canonical_path=str(canonical_path), verified=verified, shortcut_path=shortcut_path)

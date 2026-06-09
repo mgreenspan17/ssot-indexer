@@ -5,10 +5,8 @@ from pathlib import Path
 import shlex
 import subprocess
 
-from blake3 import blake3
-
 from classify.classifier import classify_file
-from hashing.blake3_utils import CHUNK_SIZE
+from hashing.blake3_utils import CHUNK_SIZE, create_blake3_hasher
 from scanner.models import FileRecord, ScanManifest
 from uuid.generator import uuid7_str
 
@@ -53,7 +51,7 @@ def _hash_remote_file(config: SSHConfig, remote_path: str) -> str:
     process = subprocess.Popen(_ssh_base(config) + [remote_command], stdout=subprocess.PIPE)
     if process.stdout is None:
         raise RuntimeError("failed to open ssh stdout stream")
-    hasher = blake3()
+    hasher = create_blake3_hasher()
     while True:
         chunk = process.stdout.read(CHUNK_SIZE)
         if not chunk:

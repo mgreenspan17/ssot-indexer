@@ -4,10 +4,8 @@ from dataclasses import dataclass
 import json
 import subprocess
 
-from blake3 import blake3
-
 from classify.classifier import classify_file
-from hashing.blake3_utils import CHUNK_SIZE
+from hashing.blake3_utils import CHUNK_SIZE, create_blake3_hasher
 from scanner.models import FileRecord, ScanManifest
 from uuid.generator import uuid7_str
 
@@ -33,7 +31,7 @@ def _hash_rclone_file(config: RcloneConfig, remote_path: str) -> str:
     process = subprocess.Popen(command, stdout=subprocess.PIPE)
     if process.stdout is None:
         raise RuntimeError("failed to open rclone stdout stream")
-    hasher = blake3()
+    hasher = create_blake3_hasher()
     while True:
         chunk = process.stdout.read(CHUNK_SIZE)
         if not chunk:

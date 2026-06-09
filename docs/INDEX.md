@@ -10,6 +10,7 @@
 - [Audit and Provenance Engine](AUDIT_PROVENANCE.md)
 - [System Governance and Modularity](MODULARITY.md)
 - [Documentation Style Guide](SSOT_PLATFORM_STYLEGUIDE.md)
+- [Implementation Update 2026-06-09](IMPLEMENTATION_UPDATE_2026-06-09.md)
 
 ## Business and Product
 
