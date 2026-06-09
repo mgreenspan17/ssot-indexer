@@ -52,6 +52,12 @@
 
     completionOverlay: $("completionOverlay"),
     completionSummary: $("completionSummary"),
+    debugRecordBtn:    $("debugRecordBtn"),
+    debugRecordModal:  $("debugRecordModal"),
+    closeDebugModal:   $("closeDebugModal"),
+    debugTableBody:    $("debugTableBody"),
+    debugPrettyContent:$("debugPrettyContent"),
+    debugJsonContent:  $("debugJsonContent"),
   };
 
   // ── State ───────────────────────────────────────
@@ -668,6 +674,106 @@
     if (e.target === dom.errorsModal) {
       dom.errorsModal.classList.remove("visible");
     }
+  });
+
+  // ── Debug Record Modal Interaction ─────────────
+  async function fetchSampleRecord() {
+    dom.debugTableBody.innerHTML = '<tr><td colspan="2" class="text-center" style="color:var(--text-dim); padding:20px;">Loading sample record...</td></tr>';
+    dom.debugPrettyContent.textContent = "Loading...";
+    dom.debugJsonContent.textContent = "Loading...";
+    
+    try {
+      const res = await fetch("/api/scan/sample_record");
+      if (!res.ok) {
+        if (res.status === 404) {
+          throw new Error("No scan manifest files found, or manifest is empty. Ensure a scan has started and generated at least one file entry.");
+        }
+        throw new Error(`HTTP Error ${res.status}`);
+      }
+      const record = await res.json();
+      renderSampleRecord(record);
+    } catch (err) {
+      dom.debugTableBody.innerHTML = `<tr><td colspan="2" class="text-center" style="color:var(--danger); padding:20px;">Error: ${escapeHtml(err.message)}</td></tr>`;
+      dom.debugPrettyContent.textContent = `Error: ${err.message}`;
+      dom.debugJsonContent.textContent = `Error: ${err.message}`;
+    }
+  }
+
+  function renderSampleRecord(record) {
+    // 1. Render Table View
+    dom.debugTableBody.innerHTML = "";
+    Object.keys(record).forEach(key => {
+      const tr = document.createElement("tr");
+      let val = record[key];
+      if (typeof val === "object" && val !== null) {
+        val = JSON.stringify(val);
+      } else if (val === null || val === undefined) {
+        val = "—";
+      }
+      tr.innerHTML = `
+        <td>${escapeHtml(key)}</td>
+        <td>${escapeHtml(String(val))}</td>
+      `;
+      dom.debugTableBody.appendChild(tr);
+    });
+
+    // 2. Render Pretty Print
+    let pretty = "";
+    Object.keys(record).forEach(key => {
+      let val = record[key];
+      if (key === "mtime" && typeof val === "number") {
+        const d = new Date(val * 1000);
+        val = `${val} (${d.toLocaleString()})`;
+      } else if (key === "size" && typeof val === "number") {
+        const fmt = formatBytes(val);
+        val = `${val} (${fmt.value} ${fmt.unit})`;
+      }
+      pretty += `${key.toUpperCase().padEnd(20)}: ${val}\n`;
+    });
+    dom.debugPrettyContent.textContent = pretty;
+
+    // 3. Render Raw JSON
+    dom.debugJsonContent.textContent = JSON.stringify(record, null, 2);
+  }
+
+  // Debug Modal events
+  if (dom.debugRecordBtn) {
+    dom.debugRecordBtn.addEventListener("click", () => {
+      fetchSampleRecord();
+      dom.debugRecordModal.classList.add("visible");
+      
+      // Default to table tab
+      document.querySelectorAll(".debug-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".debug-tab-content").forEach(c => c.classList.remove("active"));
+      document.querySelector('[data-tab="tab-view"]').classList.add("active");
+      dom.debugRecordModal.querySelector("#tab-view").classList.add("active");
+    });
+  }
+
+  if (dom.closeDebugModal) {
+    dom.closeDebugModal.addEventListener("click", () => {
+      dom.debugRecordModal.classList.remove("visible");
+    });
+  }
+
+  if (dom.debugRecordModal) {
+    dom.debugRecordModal.addEventListener("click", (e) => {
+      if (e.target === dom.debugRecordModal) {
+        dom.debugRecordModal.classList.remove("visible");
+      }
+    });
+  }
+
+  // Tabs switching
+  document.querySelectorAll(".debug-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".debug-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".debug-tab-content").forEach(c => c.classList.remove("active"));
+      
+      tab.classList.add("active");
+      const targetId = tab.getAttribute("data-tab");
+      dom.debugRecordModal.querySelector(`#${targetId}`).classList.add("active");
+    });
   });
 
 })();

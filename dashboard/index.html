@@ -27,6 +27,14 @@
         <h1 class="title">File Indexer</h1>
       </div>
       <div class="header-right">
+        <button class="debug-btn" id="debugRecordBtn" title="Inspect a sample record from the manifest" style="margin-right: 12px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; margin-right: 6px; vertical-align: middle;">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          Inspect Record
+        </button>
         <div class="status-badge" id="statusBadge">
           <span class="status-dot" id="statusDot"></span>
           <span class="status-text" id="statusText">CONNECTING…</span>
@@ -215,6 +223,56 @@
             <ul class="errors-list-view" id="errorsListView">
               <li class="error-empty">No errors recorded so far.</li>
             </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         DEBUG SAMPLE RECORD MODAL
+         ═══════════════════════════════════════════ -->
+    <div class="modal-overlay" id="debugRecordModal">
+      <div class="modal-content debug-modal-content">
+        <div class="modal-header">
+          <h2 class="section-title" style="display:flex; align-items:center; gap:8px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; vertical-align: middle;">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            Record Inspector
+          </h2>
+          <button class="close-button" id="closeDebugModal">&times;</button>
+        </div>
+        <div class="modal-body" style="display:flex; flex-direction:column; height:calc(100% - 60px);">
+          <div class="debug-tabs">
+            <button class="debug-tab active" data-tab="tab-view">Table View</button>
+            <button class="debug-tab" data-tab="tab-pretty">Pretty Print</button>
+            <button class="debug-tab" data-tab="tab-json">Raw JSON</button>
+          </div>
+          
+          <div class="debug-tab-content active" id="tab-view">
+            <div class="debug-table-wrapper">
+              <table class="debug-table">
+                <thead>
+                  <tr>
+                    <th>Field</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody id="debugTableBody">
+                  <tr><td colspan="2" class="text-center" style="color:var(--text-dim); padding:20px;">Loading sample record...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+          <div class="debug-tab-content" id="tab-pretty">
+            <pre class="debug-pretty-block" id="debugPrettyContent">Loading...</pre>
+          </div>
+          
+          <div class="debug-tab-content" id="tab-json">
+            <pre class="debug-code-block"><code id="debugJsonContent">Loading...</code></pre>
           </div>
         </div>
       </div>

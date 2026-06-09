@@ -182,6 +182,56 @@ def create_dashboard_server() -> FastAPI:
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
+    @app.get("/api/scan/sample_record")
+    def api_scan_sample_record(output_dir: str = "/home/mannieg/ssot-indexer/scan_results") -> dict[str, Any]:
+        import json
+        import os
+        paths_to_check = [
+            Path(output_dir),
+            Path("/srv/data/ssot/scan_results"),
+            Path("/home/mannieg/ssot-indexer/scan_results")
+        ]
+        manifest_file = None
+        
+        for p in paths_to_check:
+            if p.exists():
+                jsonl_files = sorted(
+                    p.glob("scan_manifest_*.jsonl"),
+                    key=lambda f: f.stat().st_mtime,
+                    reverse=True
+                )
+                if jsonl_files:
+                    manifest_file = jsonl_files[0]
+                    break
+                    
+        if not manifest_file or not manifest_file.exists():
+            raise HTTPException(status_code=404, detail="No scan manifest files found to sample")
+            
+        try:
+            last_line = ""
+            with open(manifest_file, "rb") as f:
+                try:
+                    f.seek(-2, os.SEEK_END)
+                    while f.read(1) != b'\n':
+                        f.seek(-2, os.SEEK_CUR)
+                    last_line = f.readline().decode("utf-8").strip()
+                except OSError:
+                    f.seek(0)
+                    last_line = f.readline().decode("utf-8").strip()
+                    
+            if not last_line:
+                with open(manifest_file, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                    if lines:
+                        last_line = lines[-1].strip()
+                        
+            if last_line:
+                return json.loads(last_line)
+            else:
+                raise HTTPException(status_code=404, detail="Manifest file is empty")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to read sample record: {str(e)}")
+
     return app
 
 
