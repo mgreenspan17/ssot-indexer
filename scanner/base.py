@@ -198,8 +198,11 @@ def iter_regular_files(root: str | Path, excluded_dirs: Iterable[str] | None = N
     root_path = Path(root)
     records: list[Path] = []
     excluded = {name.lower() for name in (excluded_dirs or ())}
+    system_exclusions = {"containerd", "docker", "lost+found"}
+    excluded.update(system_exclusions)
     for current_root, dirs, files in os.walk(root_path):
-        dirs[:] = [name for name in dirs if name.lower() not in excluded]
+        if excluded:
+            dirs[:] = [name for name in dirs if name.lower() not in excluded]
         for file_name in files:
             path = Path(current_root) / file_name
             try:
@@ -224,14 +227,17 @@ def manifest_from_records(source: str, records: list[FileRecord], descriptor: So
     )
 
 
-def _hash_with_fallback(path: Path, fallback_payload: dict[str, Any]) -> tuple[str, str]:
+def _hash_with_fallback(path: Path, fallback_payload: dict[str, Any]) -> tuple[str, str, str]:
     try:
-        hash_result = hash_file(path)
-        return hash_result.algorithm, hash_result.digest
+        from hashing.blake3_utils import dual_hash_file
+        hash_result = dual_hash_file(path)
+        return hash_result.algorithm, hash_result.blake3_digest, hash_result.sha256_digest
     except OSError:
+        import hashlib
         payload = json.dumps(fallback_payload, sort_keys=True).encode("utf-8")
         hash_result = hash_bytes(payload)
-        return hash_result.algorithm, hash_result.digest
+        sha256_digest = hashlib.sha256(payload).hexdigest()
+        return "fallback", hash_result.digest, sha256_digest
 
 
 def build_file_record(
@@ -250,7 +256,7 @@ def build_file_record(
         "mtime": stat_result.st_mtime,
     }
     classification = classify_file(path)
-    algorithm, digest = _hash_with_fallback(path, fallback_payload)
+    algorithm, blake3_digest, sha256_digest = _hash_with_fallback(path, fallback_payload)
     mime_type = mime_type_override or classification.mime_type
     descriptor = source_descriptor or build_source_descriptor("local", source)
     return FileRecord(
@@ -261,7 +267,8 @@ def build_file_record(
         mtime=stat_result.st_mtime,
         mode=stat_result.st_mode,
         hash_algorithm=algorithm,
-        blake3=digest,
+        blake3=blake3_digest,
+        sha256=sha256_digest,
         category=classification.category,
         mime_type=mime_type,
         shortcut_allowed=classification.shortcut_allowed,

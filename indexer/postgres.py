@@ -80,9 +80,19 @@ class PostgresRepository:
                     on conflict (algorithm, digest) do update set size = excluded.size
                     returning id
                     """,
-                    (record.hash_algorithm, record.blake3, record.size),
+                    ("blake3", record.blake3, record.size),
                 )
                 hash_id = cursor.fetchone()[0]
+
+                if record.sha256:
+                    cursor.execute(
+                        """
+                        insert into hashes (algorithm, digest, size)
+                        values (%s, %s, %s)
+                        on conflict (algorithm, digest) do update set size = excluded.size
+                        """,
+                        ("sha256", record.sha256, record.size),
+                    )
                 cursor.execute(
                     "select coalesce(max(version_number), 0) + 1 from versions where file_id = %s",
                     (record.uuid7,),
@@ -119,6 +129,85 @@ class PostgresRepository:
                 )
                 cursor.execute("update files set current_version_id = %s where id = %s", (version_id, record.uuid7))
         return IngestionResult(file_id=record.uuid7, version_id=version_id, hash_id=int(hash_id))
+
+    def ingest_records_batch(self, batch: IngestionBatch, records: list[FileRecord]) -> list[IngestionResult]:
+        results = []
+        with self.connection() as conn:
+            with conn.cursor() as cursor:
+                for record in records:
+                    version_id = uuid7_str()
+                    cursor.execute(
+                        """
+                        insert into files (id, path, source, canonical_hash, category, mime_type, shortcut_allowed, current_version_id)
+                        values (%s, %s, %s, %s, %s, %s, %s, %s)
+                        on conflict (id) do update set
+                            path = excluded.path,
+                            source = excluded.source,
+                            canonical_hash = excluded.canonical_hash,
+                            category = excluded.category,
+                            mime_type = excluded.mime_type,
+                            shortcut_allowed = excluded.shortcut_allowed,
+                            current_version_id = excluded.current_version_id
+                        """,
+                        (record.uuid7, record.path, record.source, record.blake3, record.category, record.mime_type, record.shortcut_allowed, version_id),
+                    )
+                    cursor.execute(
+                        """
+                        insert into hashes (algorithm, digest, size)
+                        values (%s, %s, %s)
+                        on conflict (algorithm, digest) do update set size = excluded.size
+                        returning id
+                        """,
+                        ("blake3", record.blake3, record.size),
+                    )
+                    hash_id = cursor.fetchone()[0]
+
+                    if record.sha256:
+                        cursor.execute(
+                            """
+                            insert into hashes (algorithm, digest, size)
+                            values (%s, %s, %s)
+                            on conflict (algorithm, digest) do update set size = excluded.size
+                            """,
+                            ("sha256", record.sha256, record.size),
+                        )
+                    cursor.execute(
+                        "select coalesce(max(version_number), 0) + 1 from versions where file_id = %s",
+                        (record.uuid7,),
+                    )
+                    version_number = cursor.fetchone()[0]
+                    cursor.execute(
+                        """
+                        insert into versions (
+                            id, file_id, ingestion_batch_id, version_number, hash_id, size, mtime, mode
+                        ) values (%s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (version_id, record.uuid7, batch.id, version_number, hash_id, record.size, record.mtime, record.mode),
+                    )
+                    cursor.execute(
+                        """
+                        insert into locations (file_id, version_id, path, source, is_canonical)
+                        values (%s, %s, %s, %s, %s)
+                        """,
+                        (record.uuid7, version_id, record.path, record.source, False),
+                    )
+                    cursor.execute(
+                        """
+                        insert into metadata (version_id, data)
+                        values (%s, %s)
+                        """,
+                        (version_id, Json({"size": record.size, "mtime": record.mtime, "mode": record.mode})),
+                    )
+                    cursor.execute(
+                        """
+                        insert into classifications (version_id, category, mime_type, shortcut_allowed)
+                        values (%s, %s, %s, %s)
+                        """,
+                        (version_id, record.category, record.mime_type, record.shortcut_allowed),
+                    )
+                    cursor.execute("update files set current_version_id = %s where id = %s", (version_id, record.uuid7))
+                    results.append(IngestionResult(file_id=record.uuid7, version_id=version_id, hash_id=int(hash_id)))
+        return results
 
     def mark_batch_complete(self, batch_id: str) -> None:
         with self.connection() as conn:

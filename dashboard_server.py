@@ -153,6 +153,35 @@ def create_dashboard_server() -> FastAPI:
             "system_health": dashboard_api_system.get_system_health(),
         }
 
+    @app.get("/api/scan/state")
+    def api_scan_state(state_path: str = "/tmp/ssot_scan_state.json") -> dict[str, Any]:
+        import json
+        path = Path(state_path)
+        if not path.exists():
+            return {
+                "status": "idle",
+                "started_at": "",
+                "current_file": "",
+                "files_indexed": 0,
+                "files_total_estimate": 0,
+                "bytes_hashed": 0,
+                "errors": 0,
+                "error_log": [],
+                "recent_files": [],
+                "files_per_second": 0.0,
+                "elapsed_seconds": 0.0,
+                "eta_seconds": 0.0,
+                "roots": [],
+                "current_root": "",
+                "current_root_index": 0,
+                "total_roots": 0
+            }
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
     return app
 
 

@@ -105,3 +105,8 @@ indexer-state.json
 htmlcov/
 .pytest_cache/
 .mypy_cache/
+
+# Scan manifests and results
+scan_results/
+*.jsonl
+

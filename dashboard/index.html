@@ -1,32 +1,242 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <!-- Assumptions: placeholder data is acceptable until Warp populates live feeds. -->
-    <!-- Boundaries: this page is read-only and does not execute operations. -->
-    <!-- Integration notes: bind dashboard.js to dashboard_api.py when live APIs are available. -->
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SSOT OS Operator Dashboard</title>
-    <link rel="stylesheet" href="dashboard.css" />
-  </head>
-  <body>
-    <header class="hero">
-      <div>
-        <p class="eyebrow">SSOT OS</p>
-        <h1>Operator Dashboard</h1>
-        <p class="lede">Placeholder operator console for governance, crawl status, system health, and file navigation.</p>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SSOT OS — File Indexer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+  <!-- ─── Ambient background blobs ─── -->
+  <div class="ambient-bg">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+
+  <div class="dashboard">
+    <!-- ═══════════════════════════════════════════
+         1. HEADER BAR
+         ═══════════════════════════════════════════ -->
+    <header class="header">
+      <div class="header-left">
+        <span class="eyebrow">SSOT OS</span>
+        <h1 class="title">File Indexer</h1>
       </div>
-      <div id="governance-version-panel" class="panel panel--accent"></div>
+      <div class="header-right">
+        <div class="status-badge" id="statusBadge">
+          <span class="status-dot" id="statusDot"></span>
+          <span class="status-text" id="statusText">CONNECTING…</span>
+        </div>
+        <div class="clock" id="clock"></div>
+      </div>
     </header>
 
-    <main class="grid">
-      <section id="agent-status-panel" class="panel"></section>
-      <section id="crawl-progress-panel" class="panel"></section>
-      <section id="file-browser-panel" class="panel"></section>
-      <section id="system-health-panel" class="panel"></section>
-    </main>
+    <!-- ═══════════════════════════════════════════
+         2. KEY METRICS ROW
+         ═══════════════════════════════════════════ -->
+    <section class="metrics-row">
+      <!-- Files Indexed -->
+      <div class="card metric-card">
+        <div class="card-icon files-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+        </div>
+        <div class="card-body">
+          <span class="card-label">Files Indexed</span>
+          <div class="card-value">
+            <span class="big-number" id="filesIndexed">0</span>
+            <span class="separator">/</span>
+            <span class="total-number" id="filesTotal">0</span>
+          </div>
+        </div>
+      </div>
 
-    <footer class="footer">Placeholder APIs are safe until Warp populates real crawl and mesh data.</footer>
-    <script type="module" src="dashboard.js"></script>
-  </body>
+      <!-- Bytes Hashed -->
+      <div class="card metric-card">
+        <div class="card-icon bytes-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </div>
+        <div class="card-body">
+          <span class="card-label">Bytes Hashed</span>
+          <div class="card-value">
+            <span class="big-number" id="bytesHashed">0</span>
+            <span class="unit" id="bytesUnit">B</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Speed -->
+      <div class="card metric-card">
+        <div class="card-icon speed-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+        </div>
+        <div class="card-body">
+          <span class="card-label">Speed</span>
+          <div class="card-value">
+            <span class="big-number" id="filesPerSecond">0</span>
+            <span class="unit">files/s</span>
+          </div>
+          <div class="sparkline-container" id="sparklineContainer">
+            <canvas id="sparklineCanvas" width="120" height="32"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Errors -->
+      <div class="card metric-card" id="errorsCard">
+        <div class="card-icon errors-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <div class="card-body">
+          <span class="card-label">Errors</span>
+          <div class="card-value">
+            <span class="big-number" id="errorsCount">0</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════
+         3. PROGRESS SECTION
+         ═══════════════════════════════════════════ -->
+    <section class="card progress-section">
+      <div class="progress-header">
+        <span class="progress-label">Indexing Progress</span>
+        <span class="progress-percentage" id="progressPercent">0%</span>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progressBar">
+          <div class="progress-shimmer"></div>
+        </div>
+      </div>
+      <div class="progress-meta">
+        <div class="meta-item">
+          <span class="meta-label">Elapsed</span>
+          <span class="meta-value" id="elapsedTime">00:00:00</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">ETA</span>
+          <span class="meta-value" id="etaTime">—</span>
+        </div>
+        <div class="meta-item root-info">
+          <span class="meta-label">Current Root</span>
+          <span class="meta-value" id="currentRoot">—</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Root Progress</span>
+          <span class="meta-value" id="rootProgress">— / —</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════
+         4 & 5. BOTTOM ROW: Live Feed + Current Activity
+         ═══════════════════════════════════════════ -->
+    <section class="bottom-row">
+      <!-- Current Activity -->
+      <div class="card activity-card">
+        <h2 class="section-title">Current Activity</h2>
+        <div class="activity-current">
+          <div class="spinner" id="activitySpinner">
+            <div class="spinner-ring"></div>
+          </div>
+          <div class="activity-path-wrap">
+            <span class="activity-label">Now hashing</span>
+            <span class="activity-path" id="currentFilePath" title="">—</span>
+          </div>
+        </div>
+
+        <!-- Roots list -->
+        <div class="roots-section">
+          <h3 class="roots-title">Scan Roots</h3>
+          <ul class="roots-list" id="rootsList">
+            <li class="root-empty">—</li>
+          </ul>
+        </div>
+
+        <!-- Mini stats -->
+        <div class="mini-stats">
+          <div class="mini-stat">
+            <span class="mini-label">Avg Speed</span>
+            <span class="mini-value" id="avgSpeed">—</span>
+          </div>
+          <div class="mini-stat">
+            <span class="mini-label">Peak Speed</span>
+            <span class="mini-value" id="peakSpeed">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live File Feed -->
+      <div class="card feed-card">
+        <div class="feed-header">
+          <h2 class="section-title">
+            <span class="live-dot" id="feedDot"></span>
+            Live File Feed
+          </h2>
+          <span class="feed-hint">hover to pause</span>
+        </div>
+        <div class="feed-list-wrapper" id="feedWrapper">
+          <ul class="feed-list" id="feedList">
+            <li class="feed-empty">Waiting for data…</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════
+         ERRORS MODAL
+         ═══════════════════════════════════════════ -->
+    <div class="modal-overlay" id="errorsModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="section-title">Scan Errors Log</h2>
+          <button class="close-button" id="closeErrorsModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="errors-list-wrapper">
+            <ul class="errors-list-view" id="errorsListView">
+              <li class="error-empty">No errors recorded so far.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         COMPLETION OVERLAY
+         ═══════════════════════════════════════════ -->
+    <div class="completion-overlay" id="completionOverlay">
+      <div class="completion-content">
+        <div class="checkmark-circle">
+          <svg viewBox="0 0 52 52">
+            <circle cx="26" cy="26" r="24" fill="none" stroke="currentColor" stroke-width="2"/>
+            <path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M14 27l8 8 16-16"/>
+          </svg>
+        </div>
+        <h2>Indexing Complete</h2>
+        <p id="completionSummary"></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="dashboard.js"></script>
+</body>
 </html>

@@ -70,6 +70,7 @@ include = [
   "resolver*",
   "rules*",
   "scanner*",
+  "ssot_core*",
   "shortcuts*",
   "telemetry*",
   "t320*",

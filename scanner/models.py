@@ -20,6 +20,7 @@ class FileRecord:
     category: str
     mime_type: str
     shortcut_allowed: bool
+    sha256: str = ""
     source_id: str = ""
     source_type: SourceType = "local"
     source_label: str | None = None

@@ -28,6 +28,7 @@ Checksum: <PENDING>
 - [18. How to Recover From Drift](#18-how-to-recover-from-drift)
 - [19. How to Extend the OS](#19-how-to-extend-the-os)
 - [20. Integration Notes for Warp, Copilot, Cody, and Experimental Agents](#20-integration-notes-for-warp-copilot-cody-and-experimental-agents)
+- [21. Permanent Roadmap Modules: Semantic Similarity and DesktopCam](#21-permanent-roadmap-modules-semantic-similarity-and-desktopcam)
 
 ## 1. Purpose and Scope
 
@@ -450,3 +451,67 @@ Boundaries:
 
 Integration notes:
 - This master plan should be the first document loaded by new agent bootstraps.
+
+## 21. Permanent Roadmap Modules: Semantic Similarity and DesktopCam
+
+This section adds two permanent SSOT roadmap modules and defines the initial architecture and integration points.
+
+### 21.1 Semantic Similarity Layer (Future Intelligence)
+
+Goals:
+- Group semantically related files even when binary hashes differ.
+- Support similarity for edited images, screenshots, derived documents, and near-duplicate media.
+
+Core capabilities:
+- Perceptual hashing (`aHash`, `dHash`, `pHash`).
+- Embedding similarity (CLIP-compatible embedding interface with cosine similarity).
+- Semantic clustering that links multiple canonical file IDs in a single cluster.
+
+Data model targets:
+- `semantic_cluster(cluster_id, canonical_file_ids[], similarity_scores, representative_embedding, created_at, updated_at)`
+- Optional bridge table for membership and scoring materialization.
+
+Integration points:
+- Input from SSOT canonical/version datasets (`files`, `versions`, provider metadata).
+- Output feeds duplicate review, search ranking, timeline correlation, and DesktopCam frame grouping.
+
+Required APIs:
+- `find_semantically_similar_files(file_id)`
+- `cluster_new_file(file_id)`
+- `rebuild_semantic_clusters()`
+
+### 21.2 DesktopCam (Forensic-Grade Immutable Screen Recorder)
+
+Goals:
+- Capture screen frames at configurable FPS.
+- Assign UUID7 timestamps, hash each frame with BLAKE3, and store append-only audit events.
+- Preserve chain-of-custody for forensic export and verification.
+
+Core capabilities:
+- Frame capture pipeline (1-10 FPS).
+- Canonical/materialization path: frame -> canonical identity -> version -> instance.
+- Append-only event chain linking each event to the previous event hash.
+- Crash-safe flush hooks and partial-chain recovery logic.
+
+Data model targets:
+- `desktopcam_frame(frame_id, timestamp_uuid7, session_id, device_id, file_id, version_id, blake3_hash, bytes_size, created_at)`
+- `audit_event(event_id, timestamp_uuid7, blake3_hash, frame_id, previous_event_hash, event_hash, created_at)`
+
+Immutability controls:
+- No updates/deletes on `audit_event`.
+- Trigger-based enforcement for append-only semantics.
+
+Required APIs:
+- `start_desktopcam()`
+- `stop_desktopcam()`
+- `verify_event_chain()`
+- `export_forensic_bundle()`
+
+Assumptions:
+- Canonical identity (BLAKE3), UUID7 versioning, provider sync, duplicate detection, and move detection remain in place.
+
+Boundaries:
+- These modules extend intelligence and forensic trust surfaces; they do not replace canonical hash identity.
+
+Integration notes:
+- Implement as composable modules first, then wire persistence and API routes through existing orchestrator/pipeline services.
