@@ -7,15 +7,22 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 import json
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
+
+try:
+    import psycopg2
+    from psycopg2.extras import Json
+except Exception:  # pragma: no cover - optional in dry-run-only environments
+    psycopg2 = None  # type: ignore[assignment]
+
+    class Json:  # type: ignore[no-redef]
+        def __init__(self, value: Any):
+            self.value = value
 
 from hashing.provenance import (
-    MerkleNodeRecord,
     blake3_hex_bytes,
     blake3_hex_json,
-    blake3_hex_text,
     build_merkle_tree,
-    canonical_json_dumps,
 )
 
 
@@ -44,6 +51,7 @@ class ArtifactPlan:
     parent_edges: List[PreparedInsert]
     block_snapshots: List[PreparedInsert]
     status_events: List[PreparedInsert]
+    blob_pointers: List[PreparedInsert] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -108,6 +116,430 @@ class IngestPlan:
         for artifact in self.artifacts:
             rows.extend(artifact.status_events)
         return rows
+
+    @property
+    def blob_pointers(self) -> List[PreparedInsert]:
+        rows: List[PreparedInsert] = []
+        for artifact in self.artifacts:
+            rows.extend(artifact.blob_pointers)
+        return rows
+
+
+@dataclass(frozen=True)
+class TableWriteCounts:
+    attempted: int = 0
+    inserted: int = 0
+    skipped: int = 0
+    updated: int = 0
+
+
+@dataclass(frozen=True)
+class PlanWriteReport:
+    run_id: str
+    tenant_id: str
+    workspace_id: str
+    artifact_count: int
+    transaction_committed: bool
+    table_counts: Dict[str, TableWriteCounts]
+
+
+def resolve_database_write_request(
+    write_enabled: bool,
+    confirm_db_write: bool,
+    environ: Mapping[str, str],
+) -> Optional[str]:
+    if not write_enabled:
+        return None
+    if not confirm_db_write:
+        raise ValueError("--write requires --confirm-db-write")
+    dsn = environ.get("DATABASE_URL", "").strip()
+    if not dsn:
+        raise ValueError("DATABASE_URL is required when --write is set")
+    return dsn
+
+
+class NotionPlanPostgresWriter:
+    """Write a prepared Notion ingest plan into Postgres with guarded conflict handling."""
+
+    WRITE_ORDER: Tuple[str, ...] = (
+        "notion_index.crawl_run",
+        "notion_index.raw_artifact",
+        "notion_index.ingest_batch",
+        "notion_index.merkle_tree",
+        "notion_index.merkle_node",
+        "notion_index.object_snapshot",
+        "notion_index.block_snapshot",
+        "notion_index.parent_edge",
+        "notion_index.blob_pointer",
+        "notion_index.status_event",
+        "notion_index.object_current",
+    )
+
+    def __init__(self, dsn: str, connect_fn: Optional[Callable[..., Any]] = None):
+        self._dsn = dsn
+        if connect_fn is not None:
+            self._connect_fn = connect_fn
+        else:
+            if psycopg2 is None:
+                raise RuntimeError("psycopg2 is required for --write mode")
+            self._connect_fn = psycopg2.connect
+
+    @classmethod
+    def planned_table_rows(cls, plan: IngestPlan) -> List[Tuple[str, List[Dict[str, Any]]]]:
+        return [
+            ("notion_index.crawl_run", [plan.crawl_run.row]),
+            ("notion_index.raw_artifact", [row.row for row in plan.raw_artifacts]),
+            ("notion_index.ingest_batch", [row.row for row in plan.ingest_batches]),
+            ("notion_index.merkle_tree", [row.row for row in plan.merkle_trees]),
+            ("notion_index.merkle_node", [row.row for row in plan.merkle_nodes]),
+            ("notion_index.object_snapshot", [row.row for row in plan.object_snapshots]),
+            ("notion_index.block_snapshot", [row.row for row in plan.block_snapshots]),
+            ("notion_index.parent_edge", [row.row for row in plan.parent_edges]),
+            ("notion_index.blob_pointer", [row.row for row in plan.blob_pointers]),
+            ("notion_index.status_event", [row.row for row in plan.status_events]),
+            ("notion_index.object_current", [row.row for row in plan.object_current_rows]),
+        ]
+
+    @staticmethod
+    def sql_strategy_map() -> Dict[str, str]:
+        return {
+            "notion_index.crawl_run": "insert_crawl_run_upsert",
+            "notion_index.raw_artifact": "insert_raw_artifact_append_only",
+            "notion_index.ingest_batch": "insert_ingest_batch_append_only",
+            "notion_index.merkle_tree": "insert_merkle_tree_append_only",
+            "notion_index.merkle_node": "insert_merkle_node_append_only",
+            "notion_index.object_snapshot": "insert_object_snapshot_append_only",
+            "notion_index.block_snapshot": "insert_block_snapshot_append_only",
+            "notion_index.parent_edge": "insert_parent_edge_append_only",
+            "notion_index.blob_pointer": "insert_blob_pointer_upsert",
+            "notion_index.status_event": "insert_status_event_append_only",
+            "notion_index.object_current": "insert_object_current_upsert",
+        }
+
+    def write_plan(self, plan: IngestPlan) -> PlanWriteReport:
+        table_counts: Dict[str, TableWriteCounts] = {}
+        connection = self._connect_fn(self._dsn)
+        committed = False
+        try:
+            with connection.cursor() as cursor:
+                for table_name, rows in self.planned_table_rows(plan):
+                    if not rows:
+                        table_counts[table_name] = TableWriteCounts(attempted=0, inserted=0, skipped=0, updated=0)
+                        continue
+                    counts = self._write_rows(cursor, table_name, rows)
+                    table_counts[table_name] = counts
+            connection.commit()
+            committed = True
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+        return PlanWriteReport(
+            run_id=plan.run_id,
+            tenant_id=plan.tenant_id,
+            workspace_id=plan.workspace_id,
+            artifact_count=len(plan.artifacts),
+            transaction_committed=committed,
+            table_counts=table_counts,
+        )
+
+    def _write_rows(self, cursor: Any, table_name: str, rows: Sequence[Dict[str, Any]]) -> TableWriteCounts:
+        attempted = len(rows)
+        inserted = 0
+        skipped = 0
+        updated = 0
+
+        if table_name == "notion_index.crawl_run":
+            for row in rows:
+                cursor.execute(
+                    """
+                    insert into notion_index.crawl_run (
+                        run_id, tenant_id, workspace_id, status, scheduler_name,
+                        bounds_json, pages_discovered, pages_indexed, blocks_indexed,
+                        api_calls, crawl_run_merkle_root, started_at, finished_at,
+                        created_at, updated_at
+                    ) values (
+                        %(run_id)s, %(tenant_id)s, %(workspace_id)s, %(status)s, %(scheduler_name)s,
+                        %(bounds_json)s, %(pages_discovered)s, %(pages_indexed)s, %(blocks_indexed)s,
+                        %(api_calls)s, %(crawl_run_merkle_root)s, %(started_at)s, %(finished_at)s,
+                        %(created_at)s, %(updated_at)s
+                    )
+                    on conflict (run_id) do update set
+                        status = excluded.status,
+                        scheduler_name = excluded.scheduler_name,
+                        bounds_json = excluded.bounds_json,
+                        pages_discovered = excluded.pages_discovered,
+                        pages_indexed = excluded.pages_indexed,
+                        blocks_indexed = excluded.blocks_indexed,
+                        api_calls = excluded.api_calls,
+                        crawl_run_merkle_root = excluded.crawl_run_merkle_root,
+                        started_at = excluded.started_at,
+                        finished_at = excluded.finished_at,
+                        updated_at = excluded.updated_at
+                    returning (xmax = 0) as inserted
+                    """,
+                    {
+                        **row,
+                        "bounds_json": Json(row["bounds_json"]),
+                    },
+                )
+                result = cursor.fetchone()
+                if result and bool(result[0]):
+                    inserted += 1
+                else:
+                    updated += 1
+
+        elif table_name == "notion_index.raw_artifact":
+            for row in rows:
+                cursor.execute(
+                    """
+                    insert into notion_index.raw_artifact (
+                        artifact_id, run_id, tenant_id, workspace_id, artifact_type,
+                        source_path, storage_path, artifact_file_blake3, byte_size,
+                        line_count, record_count, mime_type, created_at
+                    ) values (
+                        %(artifact_id)s, %(run_id)s, %(tenant_id)s, %(workspace_id)s, %(artifact_type)s,
+                        %(source_path)s, %(storage_path)s, %(artifact_file_blake3)s, %(byte_size)s,
+                        %(line_count)s, %(record_count)s, %(mime_type)s, %(created_at)s
+                    )
+                    on conflict (artifact_id) do nothing
+                    """,
+                    row,
+                )
+                if cursor.rowcount == 1:
+                    inserted += 1
+                else:
+                    skipped += 1
+
+        elif table_name == "notion_index.ingest_batch":
+            for row in rows:
+                cursor.execute(
+                    """
+                    insert into notion_index.ingest_batch (
+                        batch_id, run_id, tenant_id, workspace_id, artifact_id,
+                        batch_seq, validation_status, record_count,
+                        ingest_batch_merkle_root, verified_at, created_at
+                    ) values (
+                        %(batch_id)s, %(run_id)s, %(tenant_id)s, %(workspace_id)s, %(artifact_id)s,
+                        %(batch_seq)s, %(validation_status)s, %(record_count)s,
+                        %(ingest_batch_merkle_root)s, %(verified_at)s, %(created_at)s
+                    )
+                    on conflict (batch_id) do nothing
+                    """,
+                    row,
+                )
+                if cursor.rowcount == 1:
+                    inserted += 1
+                else:
+                    skipped += 1
+
+        elif table_name == "notion_index.merkle_tree":
+            for row in rows:
+                cursor.execute(
+                    """
+                    insert into notion_index.merkle_tree (
+                        tree_id, run_id, batch_id, tenant_id, workspace_id,
+                        tree_type, algorithm, leaf_count, root_hash, computed_at
+                    ) values (
+                        %(tree_id)s, %(run_id)s, %(batch_id)s, %(tenant_id)s, %(workspace_id)s,
+                        %(tree_type)s, %(algorithm)s, %(leaf_count)s, %(root_hash)s, %(computed_at)s
+                    )
+                    on conflict (tree_id) do nothing
+                    """,
+                    row,
+                )
+                if cursor.rowcount == 1:
+                    inserted += 1
+                else:
+                    skipped += 1
+
+        elif table_name == "notion_index.merkle_node":
+            for row in rows:
+                cursor.execute(
+                    """
+                    insert into notion_index.merkle_node (
+                        node_id, tree_id, level, position, node_kind,
+                        node_hash, left_hash, right_hash, record_blake3, created_at
+                    ) values (
+                        %(node_id)s, %(tree_id)s, %(level)s, %(position)s, %(node_kind)s,
+                        %(node_hash)s, %(left_hash)s, %(right_hash)s, %(record_blake3)s, %(created_at)s
+                    )
+                    on conflict (node_id) do nothing
+                    """,
+                    row,
+                )
+                if cursor.rowcount == 1:
+                    inserted += 1
+                else:
+                    skipped += 1
+
+        elif table_name == "notion_index.object_snapshot":
+            for row in rows:
+                cursor.execute(
+                    """
+                    insert into notion_index.object_snapshot (
+                        snapshot_id, tenant_id, workspace_id, run_id, artifact_id,
+                        batch_id, object_type, object_id, parent_id, source_version,
+                        record_blake3, raw_json_blake3, normalized_content_blake3,
+                        structure_blake3, observed_at, raw_payload
+                    ) values (
+                        %(snapshot_id)s, %(tenant_id)s, %(workspace_id)s, %(run_id)s, %(artifact_id)s,
+                        %(batch_id)s, %(object_type)s, %(object_id)s, %(parent_id)s, %(source_version)s,
+                        %(record_blake3)s, %(raw_json_blake3)s, %(normalized_content_blake3)s,
+                        %(structure_blake3)s, %(observed_at)s, %(raw_payload)s
+                    )
+                    on conflict (snapshot_id) do nothing
+                    """,
+                    {
+                        **row,
+                        "raw_payload": Json(row["raw_payload"]),
+                    },
+                )
+                if cursor.rowcount == 1:
+                    inserted += 1
+                else:
+                    skipped += 1
+
+        elif table_name == "notion_index.block_snapshot":
+            for row in rows:
+                cursor.execute(
+                    """
+                    insert into notion_index.block_snapshot (
+                        block_snapshot_id, tenant_id, workspace_id, run_id, artifact_id,
+                        batch_id, page_id, block_id, parent_block_id, block_type,
+                        depth, position, record_blake3, raw_json_blake3,
+                        normalized_content_blake3, structure_blake3, observed_at, raw_payload
+                    ) values (
+                        %(block_snapshot_id)s, %(tenant_id)s, %(workspace_id)s, %(run_id)s, %(artifact_id)s,
+                        %(batch_id)s, %(page_id)s, %(block_id)s, %(parent_block_id)s, %(block_type)s,
+                        %(depth)s, %(position)s, %(record_blake3)s, %(raw_json_blake3)s,
+                        %(normalized_content_blake3)s, %(structure_blake3)s, %(observed_at)s, %(raw_payload)s
+                    )
+                    on conflict (block_snapshot_id) do nothing
+                    """,
+                    {
+                        **row,
+                        "raw_payload": Json(row["raw_payload"]),
+                    },
+                )
+                if cursor.rowcount == 1:
+                    inserted += 1
+                else:
+                    skipped += 1
+
+        elif table_name == "notion_index.parent_edge":
+            for row in rows:
+                cursor.execute(
+                    """
+                    insert into notion_index.parent_edge (
+                        edge_id, tenant_id, workspace_id, run_id, parent_id,
+                        child_id, parent_type, child_type, edge_type, effective_at,
+                        record_blake3
+                    ) values (
+                        %(edge_id)s, %(tenant_id)s, %(workspace_id)s, %(run_id)s, %(parent_id)s,
+                        %(child_id)s, %(parent_type)s, %(child_type)s, %(edge_type)s, %(effective_at)s,
+                        %(record_blake3)s
+                    )
+                    on conflict (edge_id) do nothing
+                    """,
+                    row,
+                )
+                if cursor.rowcount == 1:
+                    inserted += 1
+                else:
+                    skipped += 1
+
+        elif table_name == "notion_index.blob_pointer":
+            for row in rows:
+                cursor.execute(
+                    """
+                    insert into notion_index.blob_pointer (
+                        blob_pointer_id, tenant_id, workspace_id, blob_blake3,
+                        object_store_path, byte_size, mime_type, source_kind,
+                        source_url, ref_count, first_seen_at, last_seen_at
+                    ) values (
+                        %(blob_pointer_id)s, %(tenant_id)s, %(workspace_id)s, %(blob_blake3)s,
+                        %(object_store_path)s, %(byte_size)s, %(mime_type)s, %(source_kind)s,
+                        %(source_url)s, %(ref_count)s, %(first_seen_at)s, %(last_seen_at)s
+                    )
+                    on conflict (blob_pointer_id) do update set
+                        object_store_path = excluded.object_store_path,
+                        byte_size = excluded.byte_size,
+                        mime_type = excluded.mime_type,
+                        source_kind = excluded.source_kind,
+                        source_url = excluded.source_url,
+                        ref_count = excluded.ref_count,
+                        last_seen_at = excluded.last_seen_at
+                    returning (xmax = 0) as inserted
+                    """,
+                    row,
+                )
+                result = cursor.fetchone()
+                if result and bool(result[0]):
+                    inserted += 1
+                else:
+                    updated += 1
+
+        elif table_name == "notion_index.status_event":
+            for row in rows:
+                cursor.execute(
+                    """
+                    insert into notion_index.status_event (
+                        status_event_id, tenant_id, workspace_id, run_id, event_type,
+                        severity, message, payload_json, status_hash, observed_at
+                    ) values (
+                        %(status_event_id)s, %(tenant_id)s, %(workspace_id)s, %(run_id)s, %(event_type)s,
+                        %(severity)s, %(message)s, %(payload_json)s, %(status_hash)s, %(observed_at)s
+                    )
+                    on conflict (status_event_id) do nothing
+                    """,
+                    {
+                        **row,
+                        "payload_json": Json(row["payload_json"]),
+                    },
+                )
+                if cursor.rowcount == 1:
+                    inserted += 1
+                else:
+                    skipped += 1
+
+        elif table_name == "notion_index.object_current":
+            for row in rows:
+                cursor.execute(
+                    """
+                    insert into notion_index.object_current (
+                        tenant_id, workspace_id, object_id, latest_snapshot_id, object_type,
+                        parent_id, current_version, current_hash, archived,
+                        latest_seen_at, updated_at
+                    ) values (
+                        %(tenant_id)s, %(workspace_id)s, %(object_id)s, %(latest_snapshot_id)s, %(object_type)s,
+                        %(parent_id)s, %(current_version)s, %(current_hash)s, %(archived)s,
+                        %(latest_seen_at)s, %(updated_at)s
+                    )
+                    on conflict (tenant_id, workspace_id, object_id) do update set
+                        latest_snapshot_id = excluded.latest_snapshot_id,
+                        object_type = excluded.object_type,
+                        parent_id = excluded.parent_id,
+                        current_version = excluded.current_version,
+                        current_hash = excluded.current_hash,
+                        archived = excluded.archived,
+                        latest_seen_at = excluded.latest_seen_at,
+                        updated_at = excluded.updated_at
+                    returning (xmax = 0) as inserted
+                    """,
+                    row,
+                )
+                result = cursor.fetchone()
+                if result and bool(result[0]):
+                    inserted += 1
+                else:
+                    updated += 1
+        else:
+            raise ValueError(f"Unsupported table write order entry: {table_name}")
+
+        return TableWriteCounts(attempted=attempted, inserted=inserted, skipped=skipped, updated=updated)
 
 
 def _now_iso() -> str:
@@ -505,29 +937,6 @@ def _build_artifact_plan(
         )
         for node in merkle_tree.nodes
     ]
-    crawl_run = PreparedInsert(
-        "notion_index.crawl_run",
-        {
-            "run_id": inferred_run_id,
-            "tenant_id": tenant_id,
-            "workspace_id": workspace_id,
-            "status": "dry-run",
-            "scheduler_name": "notion-shared-scheduler",
-            "bounds_json": {
-                "search_page_size": 100,
-                "max_page_count": len(documents),
-            },
-            "pages_discovered": sum(1 for document in documents if "page_id" in document),
-            "pages_indexed": sum(1 for document in documents if document.get("page_id") and not document.get("blocks")),
-            "blocks_indexed": sum(len(document.get("blocks", [])) for document in documents if isinstance(document.get("blocks"), list)),
-            "api_calls": 0,
-            "crawl_run_merkle_root": None,
-            "started_at": _now_iso(),
-            "finished_at": None,
-            "created_at": _now_iso(),
-            "updated_at": _now_iso(),
-        },
-    )
 
     return ArtifactPlan(
         artifact_path=str(artifact_path),
