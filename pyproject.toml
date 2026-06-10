@@ -9,7 +9,7 @@ description = "SSOT file indexer with canonical storage, shortcuts, and resolver
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "Proprietary"}
-authors = [{name = "Copilot"}]
+authors = [{name = "Mannie Greenspan"}]
 dependencies = [
   "blake3",
   "python-magic-bin; platform_system == 'Windows'",

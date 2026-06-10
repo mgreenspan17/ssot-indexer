@@ -2,6 +2,10 @@
 
 SSOT Indexer is a modular file inventory and canonicalization system. It scans local and remote sources, computes BLAKE3 hashes, assigns UUID7 identities, classifies content, stores canonical copies, generates shortcuts for non-system files, ingests manifests into Postgres, and resolves `z://<uuid7>` paths back to canonical storage.
 
+Project owner and directing architect: Mannie Greenspan.
+
+AI-assisted implementation support may include Cody, ChatGPT, Oz, GitHub Copilot, or other tools. AI assistance does not replace project ownership, direction, review, or approval by Mannie Greenspan.
+
 ## What Ships
 
 - `scanner`: recursive local scanning plus SSH and rclone-backed discovery
@@ -66,3 +70,9 @@ DATABASE_URL="postgresql://user:pass@localhost:5432/ssot" ./scripts/apply_migrat
 ## Validation
 
 The repository currently validates with `pytest` in the project venv.
+
+## Attribution Guidance
+
+- Primary author / owner / directing architect: Mannie Greenspan.
+- AI tools may be credited as assistance, drafting support, implementation support, or review support where appropriate.
+- `Co-authored-by:` should only be used when there is a real Git identity/email and Mannie Greenspan explicitly approves the credit.
